@@ -1,3 +1,7 @@
+.App {
+  text-align: center;
+}
+
 .App-header {
   background-color: #282c34;
   min-height: 100vh;
@@ -5,6 +9,88 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
   color: white;
+}
+
+.video-container {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.video-box {
+  position: relative;
+  border: 2px solid #61dafb;
+  border-radius: 8px;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.video-box h3 {
+  margin-top: 0;
+  color: #61dafb;
+}
+
+.text-display {
+  min-width: 300px;
+  padding: 1rem;
+  border: 2px solid #61dafb;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.text-display h3 {
+  margin-top: 0;
+  color: #61dafb;
+}
+
+.received-text {
+  font-size: 1.5rem;
+  padding: 1rem;
+  background-color: rgba(97, 218, 251, 0.1);
+  border-radius: 4px;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.controls {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.controls button {
+  background-color: #61dafb;
+  color: #282c34;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.controls button:hover {
+  background-color: #4fa8c7;
+}
+
+.connection-status {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background-color: rgba(97, 218, 251, 0.1);
+  border: 1px solid #61dafb;
+}
+
+.connection-info {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  color: #61dafb;
+  background-color: rgba(97, 218, 251, 0.1);
+  border-radius: 4px;
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as handpose from "@tensorflow-models/handpose";
 import Webcam from "react-webcam";
@@ -40,8 +40,16 @@ import raised_fist from "./img/raised_fist.png";
 function App() {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
-
+  const peerConnection = useRef(null);
+  const dataChannel = useRef(null);
+  const [isSender, setIsSender] = useState(true);
   const [emoji, setEmoji] = useState(null);
+  const [receivedText, setReceivedText] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("Initializing...");
+  const pendingCandidates = useRef([]);
+  const hasSetRemoteDescription = useRef(false);
+
   const images = {
     thumbs_up: thumbs_up,
     victory: victory,
@@ -59,6 +67,207 @@ function App() {
     point_left: point_left,
     point_right: point_right,
     raised_fist: raised_fist
+  };
+
+  useEffect(() => {
+    // Clear any existing data in localStorage when switching roles
+    if (isSender) {
+      localStorage.removeItem('answer');
+      localStorage.removeItem('iceCandidates');
+    } else {
+      localStorage.removeItem('offer');
+      localStorage.removeItem('iceCandidates');
+    }
+    hasSetRemoteDescription.current = false;
+    setupWebRTC();
+    return () => {
+      if (peerConnection.current) {
+        peerConnection.current.close();
+      }
+    };
+  }, [isSender]);
+
+  // Handle signaling
+  useEffect(() => {
+    const handleSignaling = async () => {
+      if (!peerConnection.current) return;
+
+      try {
+        if (isSender) {
+          // Sender creates and stores offer
+          if (peerConnection.current.signalingState === 'stable' && !localStorage.getItem('offer')) {
+            const offer = await peerConnection.current.createOffer();
+            await peerConnection.current.setLocalDescription(offer);
+            localStorage.setItem('offer', JSON.stringify(offer));
+            setConnectionStatus("Offer created, waiting for answer...");
+          }
+
+          // Check for answer
+          const answer = localStorage.getItem('answer');
+          if (answer && !hasSetRemoteDescription.current && 
+              peerConnection.current.signalingState === 'have-local-offer') {
+            const parsedAnswer = JSON.parse(answer);
+            await peerConnection.current.setRemoteDescription(new RTCSessionDescription(parsedAnswer));
+            hasSetRemoteDescription.current = true;
+            setConnectionStatus("Answer received, processing ICE candidates...");
+            
+            // Process any pending candidates
+            while (pendingCandidates.current.length > 0) {
+              const candidate = pendingCandidates.current.shift();
+              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+          }
+        } else {
+          // Receiver checks for offer
+          const offer = localStorage.getItem('offer');
+          if (offer && !hasSetRemoteDescription.current && 
+              peerConnection.current.signalingState === 'stable') {
+            const parsedOffer = JSON.parse(offer);
+            await peerConnection.current.setRemoteDescription(new RTCSessionDescription(parsedOffer));
+            hasSetRemoteDescription.current = true;
+            setConnectionStatus("Offer received, creating answer...");
+            
+            // Process any pending candidates
+            while (pendingCandidates.current.length > 0) {
+              const candidate = pendingCandidates.current.shift();
+              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+
+            const answer = await peerConnection.current.createAnswer();
+            await peerConnection.current.setLocalDescription(answer);
+            localStorage.setItem('answer', JSON.stringify(answer));
+            setConnectionStatus("Answer created and sent");
+          }
+        }
+
+        // Handle ICE candidates
+        const candidates = JSON.parse(localStorage.getItem('iceCandidates') || '[]');
+        if (candidates.length > 0) {
+          if (peerConnection.current.remoteDescription) {
+            for (const candidate of candidates) {
+              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+            localStorage.setItem('iceCandidates', '[]'); // Clear processed candidates
+          } else {
+            // Store candidates for later processing
+            pendingCandidates.current.push(...candidates);
+          }
+        }
+      } catch (error) {
+        console.error("Signaling error:", error);
+        setConnectionStatus("Error during signaling: " + error.message);
+      }
+    };
+
+    const interval = setInterval(handleSignaling, 1000);
+    return () => clearInterval(interval);
+  }, [isSender]);
+
+  const setupWebRTC = async () => {
+    try {
+      const configuration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      };
+
+      peerConnection.current = new RTCPeerConnection(configuration);
+      setConnectionStatus("WebRTC connection created");
+
+      if (isSender) {
+        // Create data channel for sender
+        dataChannel.current = peerConnection.current.createDataChannel("gestureChannel", {
+          ordered: true
+        });
+        
+        dataChannel.current.onopen = () => {
+          console.log("Data channel is open");
+          setIsConnected(true);
+          setConnectionStatus("Connected");
+        };
+        
+        dataChannel.current.onclose = () => {
+          console.log("Data channel is closed");
+          setIsConnected(false);
+          setConnectionStatus("Disconnected");
+        };
+
+        dataChannel.current.onerror = (error) => {
+          console.error("Data channel error:", error);
+          setConnectionStatus("Data channel error");
+        };
+      } else {
+        // Set up receiver
+        peerConnection.current.ondatachannel = (event) => {
+          console.log("Data channel received");
+          dataChannel.current = event.channel;
+          
+          dataChannel.current.onmessage = (event) => {
+            try {
+              console.log("Raw message received:", event.data);
+              const data = JSON.parse(event.data);
+              if (data.type === 'gesture') {
+                console.log("Gesture received:", data.name, "with confidence:", data.confidence);
+                setReceivedText(data.name);
+              }
+            } catch (error) {
+              console.error("Error processing received message:", error);
+            }
+          };
+          
+          dataChannel.current.onopen = () => {
+            console.log("Data channel is open");
+            setIsConnected(true);
+            setConnectionStatus("Connected");
+          };
+          
+          dataChannel.current.onclose = () => {
+            console.log("Data channel is closed");
+            setIsConnected(false);
+            setConnectionStatus("Disconnected");
+          };
+
+          dataChannel.current.onerror = (error) => {
+            console.error("Data channel error:", error);
+            setConnectionStatus("Data channel error");
+          };
+        };
+      }
+
+      // Handle ICE candidates
+      peerConnection.current.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log("New ICE candidate:", event.candidate);
+          const candidates = JSON.parse(localStorage.getItem('iceCandidates') || '[]');
+          candidates.push(event.candidate);
+          localStorage.setItem('iceCandidates', JSON.stringify(candidates));
+        }
+      };
+
+      // Handle connection state changes
+      peerConnection.current.onconnectionstatechange = () => {
+        console.log("Connection state:", peerConnection.current.connectionState);
+        setConnectionStatus(peerConnection.current.connectionState);
+      };
+
+      peerConnection.current.oniceconnectionstatechange = () => {
+        console.log("ICE Connection State:", peerConnection.current.iceConnectionState);
+        if (peerConnection.current.iceConnectionState === 'connected') {
+          setIsConnected(true);
+          setConnectionStatus("Connected");
+        } else if (peerConnection.current.iceConnectionState === 'disconnected' || 
+                   peerConnection.current.iceConnectionState === 'failed') {
+          setIsConnected(false);
+          setConnectionStatus("Disconnected");
+        }
+      };
+
+    } catch (error) {
+      console.error("Error setting up WebRTC:", error);
+      setConnectionStatus("Error setting up WebRTC: " + error.message);
+    }
   };
 
   const runHandpose = async () => {
@@ -112,7 +321,22 @@ function App() {
           const maxConfidence = confidence.indexOf(
             Math.max.apply(null, confidence)
           );
-          setEmoji(gesture.gestures[maxConfidence].name);
+          const gestureName = gesture.gestures[maxConfidence].name;
+          setEmoji(gestureName);
+          
+          // Send gesture text through WebRTC
+          if (isSender && isConnected && dataChannel.current && dataChannel.current.readyState === 'open') {
+            try {
+              console.log("Sending gesture:", gestureName);
+              dataChannel.current.send(JSON.stringify({
+                type: 'gesture',
+                name: gestureName,
+                confidence: gesture.gestures[maxConfidence].score
+              }));
+            } catch (error) {
+              console.error("Error sending gesture:", error);
+            }
+          }
         }
       }
 
@@ -123,53 +347,57 @@ function App() {
     }
   }
 
-  runHandpose();
+  useEffect(() => {
+    runHandpose();
+  }, []);
 
   return (
     <div className="App">
       <header className="App-header">
-        <Webcam ref={webcamRef}
-          style={{
-            position: "absolute",
-            marginLeft: "auto",
-            marginRight: "auto",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            zindex: 9,
-            width: 640,
-            height: 480
-          }} />
-        <canvas ref={canvasRef}
-          style={{
-            position: "absolute",
-            marginLeft: "auto",
-            marginRight: "auto",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            zindex: 9,
-            width: 640,
-            height: 480
-          }} />
+        <div className="video-container">
+          <div className="video-box">
+            <h3>{isSender ? "Sender View" : "Receiver View"}</h3>
+            <Webcam
+              ref={webcamRef}
+              style={{
+                position: "relative",
+                width: 640,
+                height: 480
+              }}
+            />
+            <canvas
+              ref={canvasRef}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: 640,
+                height: 480
+              }}
+            />
+          </div>
+          
+          {!isSender && (
+            <div className="text-display">
+              <h3>Received Gesture:</h3>
+              <div className="received-text">
+                {receivedText || "Waiting for gesture..."}
+              </div>
+              <div className="connection-info">
+                Data Channel: {dataChannel.current?.readyState || 'not created'}
+              </div>
+            </div>
+          )}
+        </div>
 
-        {emoji !== null ? (
-          <img
-            src={images[emoji]}
-            style={{
-              position: "absolute",
-              marginLeft: "auto",
-              marginRight: "auto",
-              left: 400,
-              bottom: 500,
-              right: 0,
-              textAlign: "center",
-              height: 100,
-            }}
-          />
-        ) : (
-          ""
-        )}
+        <div className="controls">
+          <button onClick={() => setIsSender(!isSender)}>
+            Switch to {isSender ? "Receiver" : "Sender"} View
+          </button>
+          <div className="connection-status">
+            {connectionStatus}
+          </div>
+        </div>
       </header>
     </div>
   );
