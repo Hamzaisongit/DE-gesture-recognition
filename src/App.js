@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as handpose from "@tensorflow-models/handpose";
 import Webcam from "react-webcam";
-import './App.css';
+import "./App.css";
 import { drawHand } from "./utils";
 import * as fp from "fingerpose";
 import ThumbsDownGesture from "./gestures/ThumbsDown.js";
@@ -19,6 +19,33 @@ import PointDownGesture from "./gestures/PointDown.js";
 import PointRightGesture from "./gestures/PointRight.js";
 import PointLeftGesture from "./gestures/PointLeft.js";
 import RaisedFistGesture from "./gestures/RaisedFist.js";
+import { aSign } from "./gestures/handsigns/Asign.js";
+import { bSign } from "./gestures/handsigns/Bsign.js";
+import { cSign } from "./gestures/handsigns/Csign.js";
+import { dSign } from "./gestures/handsigns/Dsign.js";
+import { eSign } from "./gestures/handsigns/Esign.js";
+import { fSign } from "./gestures/handsigns/Fsign.js";
+import { gSign } from "./gestures/handsigns/Gsign.js";
+import { hSign } from "./gestures/handsigns/Hsign.js";
+import { iSign } from "./gestures/handsigns/Isign.js";
+import { jSign } from "./gestures/handsigns/Jsign.js";
+import { kSign } from "./gestures/handsigns/Ksign.js";
+import { lSign } from "./gestures/handsigns/Lsign.js";
+import { mSign } from "./gestures/handsigns/Msign.js";
+import { nSign } from "./gestures/handsigns/Nsign.js";
+import { oSign } from "./gestures/handsigns/Osign.js";
+import { pSign } from "./gestures/handsigns/Psign.js";
+import { qSign } from "./gestures/handsigns/Qsign.js";
+import { rSign } from "./gestures/handsigns/Rsign.js";
+import { sSign } from "./gestures/handsigns/Ssign.js";
+import { tSign } from "./gestures/handsigns/Tsign.js";
+import { uSign } from "./gestures/handsigns/Usign.js";
+import { vSign } from "./gestures/handsigns/Vsign.js";
+import { wSign } from "./gestures/handsigns/Wsign.js";
+import { xSign } from "./gestures/handsigns/Xsign.js";
+import { ySign } from "./gestures/handsigns/Ysign.js";
+import { zSign } from "./gestures/handsigns/Zsign.js";
+
 import victory from "./img/victory.png";
 import thumbs_up from "./img/thumbs_up.png";
 import thumbs_down from "./img/thumbs_down.png";
@@ -35,7 +62,6 @@ import point_down from "./img/point_down.png";
 import point_left from "./img/point_left.png";
 import point_right from "./img/point_right.png";
 import raised_fist from "./img/raised_fist.png";
-
 
 function App() {
   const webcamRef = useRef(null);
@@ -66,17 +92,17 @@ function App() {
     point_down: point_down,
     point_left: point_left,
     point_right: point_right,
-    raised_fist: raised_fist
+    raised_fist: raised_fist,
   };
 
   useEffect(() => {
     // Clear any existing data in localStorage when switching roles
     if (isSender) {
-      localStorage.removeItem('answer');
-      localStorage.removeItem('iceCandidates');
+      localStorage.removeItem("answer");
+      localStorage.removeItem("iceCandidates");
     } else {
-      localStorage.removeItem('offer');
-      localStorage.removeItem('iceCandidates');
+      localStorage.removeItem("offer");
+      localStorage.removeItem("iceCandidates");
     }
     hasSetRemoteDescription.current = false;
     setupWebRTC();
@@ -95,59 +121,82 @@ function App() {
       try {
         if (isSender) {
           // Sender creates and stores offer
-          if (peerConnection.current.signalingState === 'stable' && !localStorage.getItem('offer')) {
+          if (
+            peerConnection.current.signalingState === "stable" &&
+            !localStorage.getItem("offer")
+          ) {
             const offer = await peerConnection.current.createOffer();
             await peerConnection.current.setLocalDescription(offer);
-            localStorage.setItem('offer', JSON.stringify(offer));
+            localStorage.setItem("offer", JSON.stringify(offer));
             setConnectionStatus("Offer created, waiting for answer...");
           }
 
           // Check for answer
-          const answer = localStorage.getItem('answer');
-          if (answer && !hasSetRemoteDescription.current && 
-              peerConnection.current.signalingState === 'have-local-offer') {
+          const answer = localStorage.getItem("answer");
+          if (
+            answer &&
+            !hasSetRemoteDescription.current &&
+            peerConnection.current.signalingState === "have-local-offer"
+          ) {
             const parsedAnswer = JSON.parse(answer);
-            await peerConnection.current.setRemoteDescription(new RTCSessionDescription(parsedAnswer));
+            await peerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(parsedAnswer)
+            );
             hasSetRemoteDescription.current = true;
-            setConnectionStatus("Answer received, processing ICE candidates...");
-            
+            setConnectionStatus(
+              "Answer received, processing ICE candidates..."
+            );
+
             // Process any pending candidates
             while (pendingCandidates.current.length > 0) {
               const candidate = pendingCandidates.current.shift();
-              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+              await peerConnection.current.addIceCandidate(
+                new RTCIceCandidate(candidate)
+              );
             }
           }
         } else {
           // Receiver checks for offer
-          const offer = localStorage.getItem('offer');
-          if (offer && !hasSetRemoteDescription.current && 
-              peerConnection.current.signalingState === 'stable') {
+          const offer = localStorage.getItem("offer");
+          if (
+            offer &&
+            !hasSetRemoteDescription.current &&
+            peerConnection.current.signalingState === "stable"
+          ) {
             const parsedOffer = JSON.parse(offer);
-            await peerConnection.current.setRemoteDescription(new RTCSessionDescription(parsedOffer));
+            await peerConnection.current.setRemoteDescription(
+              new RTCSessionDescription(parsedOffer)
+            );
             hasSetRemoteDescription.current = true;
             setConnectionStatus("Offer received, creating answer...");
-            
+
             // Process any pending candidates
             while (pendingCandidates.current.length > 0) {
               const candidate = pendingCandidates.current.shift();
-              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+              await peerConnection.current.addIceCandidate(
+                new RTCIceCandidate(candidate)
+              );
             }
 
             const answer = await peerConnection.current.createAnswer();
             await peerConnection.current.setLocalDescription(answer);
-            localStorage.setItem('answer', JSON.stringify(answer));
+            localStorage.setItem("answer", JSON.stringify(answer));
             setConnectionStatus("Answer created and sent");
           }
         }
 
         // Handle ICE candidates
-        const candidates = JSON.parse(localStorage.getItem('iceCandidates') || '[]');
+        const candidates = JSON.parse(
+          localStorage.getItem("iceCandidates") || "[]"
+        );
         if (candidates.length > 0) {
           if (peerConnection.current.remoteDescription) {
             for (const candidate of candidates) {
-              await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+              await peerConnection.current.addIceCandidate(
+                new RTCIceCandidate(candidate)
+              );
             }
-            localStorage.setItem('iceCandidates', '[]'); // Clear processed candidates
+            localStorage.setItem("iceCandidates", "[]"); // Clear processed candidates
           } else {
             // Store candidates for later processing
             pendingCandidates.current.push(...candidates);
@@ -167,10 +216,10 @@ function App() {
     try {
       const configuration = {
         iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+        ],
       };
 
       peerConnection.current = new RTCPeerConnection(configuration);
@@ -178,16 +227,19 @@ function App() {
 
       if (isSender) {
         // Create data channel for sender
-        dataChannel.current = peerConnection.current.createDataChannel("gestureChannel", {
-          ordered: true
-        });
-        
+        dataChannel.current = peerConnection.current.createDataChannel(
+          "gestureChannel",
+          {
+            ordered: true,
+          }
+        );
+
         dataChannel.current.onopen = () => {
           console.log("Data channel is open");
           setIsConnected(true);
           setConnectionStatus("Connected");
         };
-        
+
         dataChannel.current.onclose = () => {
           console.log("Data channel is closed");
           setIsConnected(false);
@@ -203,26 +255,31 @@ function App() {
         peerConnection.current.ondatachannel = (event) => {
           console.log("Data channel received");
           dataChannel.current = event.channel;
-          
+
           dataChannel.current.onmessage = (event) => {
             try {
               console.log("Raw message received:", event.data);
               const data = JSON.parse(event.data);
-              if (data.type === 'gesture') {
-                console.log("Gesture received:", data.name, "with confidence:", data.confidence);
+              if (data.type === "gesture") {
+                console.log(
+                  "Gesture received:",
+                  data.name,
+                  "with confidence:",
+                  data.confidence
+                );
                 setReceivedText(data.name);
               }
             } catch (error) {
               console.error("Error processing received message:", error);
             }
           };
-          
+
           dataChannel.current.onopen = () => {
             console.log("Data channel is open");
             setIsConnected(true);
             setConnectionStatus("Connected");
           };
-          
+
           dataChannel.current.onclose = () => {
             console.log("Data channel is closed");
             setIsConnected(false);
@@ -240,30 +297,39 @@ function App() {
       peerConnection.current.onicecandidate = (event) => {
         if (event.candidate) {
           console.log("New ICE candidate:", event.candidate);
-          const candidates = JSON.parse(localStorage.getItem('iceCandidates') || '[]');
+          const candidates = JSON.parse(
+            localStorage.getItem("iceCandidates") || "[]"
+          );
           candidates.push(event.candidate);
-          localStorage.setItem('iceCandidates', JSON.stringify(candidates));
+          localStorage.setItem("iceCandidates", JSON.stringify(candidates));
         }
       };
 
       // Handle connection state changes
       peerConnection.current.onconnectionstatechange = () => {
-        console.log("Connection state:", peerConnection.current.connectionState);
+        console.log(
+          "Connection state:",
+          peerConnection.current.connectionState
+        );
         setConnectionStatus(peerConnection.current.connectionState);
       };
 
       peerConnection.current.oniceconnectionstatechange = () => {
-        console.log("ICE Connection State:", peerConnection.current.iceConnectionState);
-        if (peerConnection.current.iceConnectionState === 'connected') {
+        console.log(
+          "ICE Connection State:",
+          peerConnection.current.iceConnectionState
+        );
+        if (peerConnection.current.iceConnectionState === "connected") {
           setIsConnected(true);
           setConnectionStatus("Connected");
-        } else if (peerConnection.current.iceConnectionState === 'disconnected' || 
-                   peerConnection.current.iceConnectionState === 'failed') {
+        } else if (
+          peerConnection.current.iceConnectionState === "disconnected" ||
+          peerConnection.current.iceConnectionState === "failed"
+        ) {
           setIsConnected(false);
           setConnectionStatus("Disconnected");
         }
       };
-
     } catch (error) {
       console.error("Error setting up WebRTC:", error);
       setConnectionStatus("Error setting up WebRTC: " + error.message);
@@ -275,12 +341,15 @@ function App() {
     //console.log("handpose model loaded");
     // loop and detect hand
     setInterval(() => {
-      detect(net)
+      detect(net);
     }, 100);
-
-  }
+  };
   const detect = async (net) => {
-    if (typeof webcamRef.current !== "undefined" && webcamRef.current != null && webcamRef.current.video.readyState === 4) {
+    if (
+      typeof webcamRef.current !== "undefined" &&
+      webcamRef.current != null &&
+      webcamRef.current.video.readyState === 4
+    ) {
       // get video properties
       const video = webcamRef.current.video;
       const videoWidth = webcamRef.current.video.videoWidth;
@@ -311,8 +380,34 @@ function App() {
           PointUpGesture,
           PointLeftGesture,
           PointDownGesture,
-          RaisedFistGesture
-        ])
+          RaisedFistGesture,
+          aSign,
+          bSign,
+          cSign,
+          dSign,
+          eSign,
+          fSign,
+          gSign,
+          hSign,
+          iSign,
+          jSign,
+          kSign,
+          lSign,
+          mSign,
+          nSign,
+          oSign,
+          pSign,
+          qSign,
+          rSign,
+          sSign,
+          tSign,
+          uSign,
+          vSign,
+          wSign,
+          xSign,
+          ySign,
+          zSign,
+        ]);
         const gesture = await GE.estimate(hand[0].landmarks, 8);
         if (gesture.gestures !== undefined && gesture.gestures.length > 0) {
           const confidence = gesture.gestures.map(
@@ -323,16 +418,23 @@ function App() {
           );
           const gestureName = gesture.gestures[maxConfidence].name;
           setEmoji(gestureName);
-          
+
           // Send gesture text through WebRTC
-          if (isSender && isConnected && dataChannel.current && dataChannel.current.readyState === 'open') {
+          if (
+            isSender &&
+            isConnected &&
+            dataChannel.current &&
+            dataChannel.current.readyState === "open"
+          ) {
             try {
               console.log("Sending gesture:", gestureName);
-              dataChannel.current.send(JSON.stringify({
-                type: 'gesture',
-                name: gestureName,
-                confidence: gesture.gestures[maxConfidence].score
-              }));
+              dataChannel.current.send(
+                JSON.stringify({
+                  type: "gesture",
+                  name: gestureName,
+                  confidence: gesture.gestures[maxConfidence].score,
+                })
+              );
             } catch (error) {
               console.error("Error sending gesture:", error);
             }
@@ -343,9 +445,8 @@ function App() {
       // Draw mesh
       const ctx = canvasRef.current.getContext("2d");
       drawHand(hand, ctx);
-
     }
-  }
+  };
 
   useEffect(() => {
     runHandpose();
@@ -362,7 +463,7 @@ function App() {
               style={{
                 position: "relative",
                 width: 640,
-                height: 480
+                height: 480,
               }}
             />
             <canvas
@@ -372,11 +473,11 @@ function App() {
                 top: 0,
                 left: 0,
                 width: 640,
-                height: 480
+                height: 480,
               }}
             />
           </div>
-          
+
           {!isSender && (
             <div className="text-display">
               <h3>Received Gesture:</h3>
@@ -384,7 +485,7 @@ function App() {
                 {receivedText || "Waiting for gesture..."}
               </div>
               <div className="connection-info">
-                Data Channel: {dataChannel.current?.readyState || 'not created'}
+                Data Channel: {dataChannel.current?.readyState || "not created"}
               </div>
             </div>
           )}
@@ -394,9 +495,7 @@ function App() {
           <button onClick={() => setIsSender(!isSender)}>
             Switch to {isSender ? "Receiver" : "Sender"} View
           </button>
-          <div className="connection-status">
-            {connectionStatus}
-          </div>
+          <div className="connection-status">{connectionStatus}</div>
         </div>
       </header>
     </div>
