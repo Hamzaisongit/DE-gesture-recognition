@@ -252,161 +252,109 @@ function VideoCall({ role }) {
       setConnectionStatus("WebRTC connection created");
 
       if (isSender) {
-        // Create data channel for sender
-        dataChannel.current = peerConnection.current.createDataChannel(
-          "gestureChannel",
-          {
-            ordered: true,
-          }
-        );
-
+        dataChannel.current = peerConnection.current.createDataChannel("gestureChannel");
+        
         dataChannel.current.onopen = () => {
-          console.log("Data channel is open");
           setIsConnected(true);
           setConnectionStatus("Connected");
         };
-
+        
         dataChannel.current.onclose = () => {
-          console.log("Data channel is closed");
           setIsConnected(false);
           setConnectionStatus("Disconnected");
         };
-
-        dataChannel.current.onerror = (error) => {
-          console.error("Data channel error:", error);
-          setConnectionStatus("Data channel error");
-        };
       } else {
-        // Set up receiver
         peerConnection.current.ondatachannel = (event) => {
-          console.log("Data channel received");
           dataChannel.current = event.channel;
-
+          
           dataChannel.current.onmessage = (event) => {
-            try {
-              console.log("Raw message received:", event.data);
-              const data = JSON.parse(event.data);
-              if (data.type === "gesture") {
-                console.log(
-                  "Gesture received:",
-                  data.name,
-                  "with confidence:",
-                  data.confidence
-                );
-                setReceivedText(data.name);
-              }
-            } catch (error) {
-              console.error("Error processing received message:", error);
+            const data = JSON.parse(event.data);
+            if (data.type === "gesture") {
+              setReceivedText(data.name);
             }
           };
-
+          
           dataChannel.current.onopen = () => {
-            console.log("Data channel is open");
             setIsConnected(true);
             setConnectionStatus("Connected");
           };
-
+          
           dataChannel.current.onclose = () => {
-            console.log("Data channel is closed");
             setIsConnected(false);
             setConnectionStatus("Disconnected");
-          };
-
-          dataChannel.current.onerror = (error) => {
-            console.error("Data channel error:", error);
-            setConnectionStatus("Data channel error");
           };
         };
       }
 
-      // Handle ICE candidates
       peerConnection.current.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log("New ICE candidate:", event.candidate);
-          const candidates = JSON.parse(
-            localStorage.getItem("iceCandidates") || "[]"
-          );
+          const candidates = JSON.parse(localStorage.getItem("iceCandidates") || "[]");
           candidates.push(event.candidate);
           localStorage.setItem("iceCandidates", JSON.stringify(candidates));
         }
       };
 
-      // Handle connection state changes
       peerConnection.current.onconnectionstatechange = () => {
-        console.log(
-          "Connection state:",
-          peerConnection.current.connectionState
-        );
         setConnectionStatus(peerConnection.current.connectionState);
       };
 
       peerConnection.current.oniceconnectionstatechange = () => {
-        console.log(
-          "ICE Connection State:",
-          peerConnection.current.iceConnectionState
-        );
         if (peerConnection.current.iceConnectionState === "connected") {
           setIsConnected(true);
           setConnectionStatus("Connected");
-        } else if (
-          peerConnection.current.iceConnectionState === "disconnected" ||
-          peerConnection.current.iceConnectionState === "failed"
-        ) {
+        } else if (peerConnection.current.iceConnectionState === "disconnected" || 
+                  peerConnection.current.iceConnectionState === "failed") {
           setIsConnected(false);
           setConnectionStatus("Disconnected");
         }
       };
     } catch (error) {
-      console.error("Error setting up WebRTC:", error);
       setConnectionStatus("Error setting up WebRTC: " + error.message);
     }
   };
 
   const runHandpose = async () => {
     const net = await handpose.load();
-    //console.log("handpose model loaded");
-    // loop and detect hand
+    // Reduce interval time from 100ms to 50ms for faster response
     setInterval(() => {
       detect(net);
-    }, 100);
+    }, 50);
   };
+
   const detect = async (net) => {
-    if (
-      typeof webcamRef.current !== "undefined" &&
-      webcamRef.current != null &&
-      webcamRef.current.video.readyState === 4
-    ) {
-      // get video properties
+    if (typeof webcamRef.current !== "undefined" && 
+        webcamRef.current != null && 
+        webcamRef.current.video.readyState === 4) {
+      
       const video = webcamRef.current.video;
       const videoWidth = webcamRef.current.video.videoWidth;
       const videoHeight = webcamRef.current.video.videoHeight;
-      // set video width and height
+      
       webcamRef.current.video.width = videoWidth;
       webcamRef.current.video.height = videoHeight;
-      // set canvas width and height
       canvasRef.current.width = videoWidth;
       canvasRef.current.height = videoHeight;
-      // make detection
+      
       const hand = await net.estimateHands(video);
 
       if (hand.length > 0) {
         const GE = new fp.GestureEstimator([
-          fp.Gestures.VictoryGesture,
-          fp.Gestures.ThumbsUpGesture,
-          ThumbsDownGesture,
-          MiddleFingerGesture,
-          OKSignGesture,
-          PinchedFingerGesture,
-          PinchedHandGesture,
-          RaisedHandGesture,
-          LoveYouGesture,
-          RockOnGesture,
-          CallMeGesture,
-          PointRightGesture,
-          PointUpGesture,
-          PointLeftGesture,
-          PointDownGesture,
-          RaisedFistGesture,
+          // fp.Gestures.VictoryGesture,
+          // fp.Gestures.ThumbsUpGesture,
+          // ThumbsDownGesture,
+          // MiddleFingerGesture,
+          // OKSignGesture,
+          // PinchedFingerGesture,
+          // PinchedHandGesture,
+          // RaisedHandGesture,
+          // LoveYouGesture,
+          // RockOnGesture,
+          // CallMeGesture,
+          // PointRightGesture,
+          // PointUpGesture,
+          // PointLeftGesture,
+          // PointDownGesture,
+          // RaisedFistGesture,
           aSign,
           bSign,
           cSign,
@@ -436,39 +384,27 @@ function VideoCall({ role }) {
         ]);
         const gesture = await GE.estimate(hand[0].landmarks, 8);
         if (gesture.gestures !== undefined && gesture.gestures.length > 0) {
-          const confidence = gesture.gestures.map(
-            (prediction) => prediction.score
-          );
-          const maxConfidence = confidence.indexOf(
-            Math.max.apply(null, confidence)
-          );
+          const confidence = gesture.gestures.map(prediction => prediction.score);
+          const maxConfidence = confidence.indexOf(Math.max.apply(null, confidence));
           const gestureName = gesture.gestures[maxConfidence].name;
-          setEmoji(gestureName);
-
-          // Send gesture text through WebRTC
-          if (
-            isSender &&
-            isConnected &&
-            dataChannel.current &&
-            dataChannel.current.readyState === "open"
-          ) {
-            try {
-              console.log("Sending gesture:", gestureName);
+          const confidenceScore = gesture.gestures[maxConfidence].score;
+          
+          // Lower confidence threshold from 0.7 to 0.6 for faster response
+          if (confidenceScore > 0.6) {
+            setEmoji(gestureName);
+            
+            if (isSender && dataChannel.current?.readyState === "open") {
               const message = JSON.stringify({
-                type: 'gesture',
+                type: "gesture",
                 name: gestureName,
-                confidence: gesture.gestures[maxConfidence].score
+                confidence: confidenceScore
               });
               dataChannel.current.send(message);
-              console.log("Message sent successfully");
-            } catch (error) {
-              console.error("Error sending gesture:", error);
             }
           }
         }
       }
 
-      // Draw mesh
       const ctx = canvasRef.current.getContext("2d");
       drawHand(hand, ctx);
     }
@@ -513,6 +449,7 @@ function VideoCall({ role }) {
               <div className="connection-info">
                 <div>Data Channel: {dataChannel.current?.readyState || 'not created'}</div>
                 <div>Connection: {connectionStatus}</div>
+                <div>Last Received: {receivedText}</div>
               </div>
             </div>
           )}
