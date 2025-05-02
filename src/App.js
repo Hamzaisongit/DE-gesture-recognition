@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import * as tf from "@tensorflow/tfjs";
 import * as handpose from "@tensorflow-models/handpose";
 import Webcam from "react-webcam";
@@ -63,18 +64,43 @@ import point_left from "./img/point_left.png";
 import point_right from "./img/point_right.png";
 import raised_fist from "./img/raised_fist.png";
 
-function App() {
+function Home() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="home-container">
+      <h1>Gesture Bridge</h1>
+      <div className="role-selection">
+        <button 
+          className="role-button sender"
+          onClick={() => navigate('/sender')}
+        >
+          Start as Sender
+        </button>
+        <button 
+          className="role-button receiver"
+          onClick={() => navigate('/receiver')}
+        >
+          Start as Receiver
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VideoCall({ role }) {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const peerConnection = useRef(null);
   const dataChannel = useRef(null);
-  const [isSender, setIsSender] = useState(true);
+  const [isSender, setIsSender] = useState(role === 'sender');
   const [emoji, setEmoji] = useState(null);
   const [receivedText, setReceivedText] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("Initializing...");
   const pendingCandidates = useRef([]);
   const hasSetRemoteDescription = useRef(false);
+  const navigate = useNavigate();
 
   const images = {
     thumbs_up: thumbs_up,
@@ -428,13 +454,13 @@ function App() {
           ) {
             try {
               console.log("Sending gesture:", gestureName);
-              dataChannel.current.send(
-                JSON.stringify({
-                  type: "gesture",
-                  name: gestureName,
-                  confidence: gesture.gestures[maxConfidence].score,
-                })
-              );
+              const message = JSON.stringify({
+                type: 'gesture',
+                name: gestureName,
+                confidence: gesture.gestures[maxConfidence].score
+              });
+              dataChannel.current.send(message);
+              console.log("Message sent successfully");
             } catch (error) {
               console.error("Error sending gesture:", error);
             }
@@ -485,20 +511,33 @@ function App() {
                 {receivedText || "Waiting for gesture..."}
               </div>
               <div className="connection-info">
-                Data Channel: {dataChannel.current?.readyState || "not created"}
+                <div>Data Channel: {dataChannel.current?.readyState || 'not created'}</div>
+                <div>Connection: {connectionStatus}</div>
               </div>
             </div>
           )}
         </div>
 
         <div className="controls">
-          <button onClick={() => setIsSender(!isSender)}>
-            Switch to {isSender ? "Receiver" : "Sender"} View
+          <button onClick={() => navigate('/')}>
+            Back to Home
           </button>
           <div className="connection-status">{connectionStatus}</div>
         </div>
       </header>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/sender" element={<VideoCall role="sender" />} />
+        <Route path="/receiver" element={<VideoCall role="receiver" />} />
+      </Routes>
+    </Router>
   );
 }
 
