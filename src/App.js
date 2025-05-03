@@ -46,6 +46,7 @@ import { wSign } from "./gestures/handsigns/Wsign.js";
 import { xSign } from "./gestures/handsigns/Xsign.js";
 import { ySign } from "./gestures/handsigns/Ysign.js";
 import { zSign } from "./gestures/handsigns/Zsign.js";
+import io from 'socket.io-client';
 
 import victory from "./img/victory.png";
 import thumbs_up from "./img/thumbs_up.png";
@@ -93,13 +94,12 @@ function VideoCall({ role }) {
   const canvasRef = useRef(null);
   const peerConnection = useRef(null);
   const dataChannel = useRef(null);
+  const socketRef = useRef(null);
   const [isSender, setIsSender] = useState(role === 'sender');
   const [emoji, setEmoji] = useState(null);
   const [receivedText, setReceivedText] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("Initializing...");
-  const pendingCandidates = useRef([]);
-  const hasSetRemoteDescription = useRef(false);
   const navigate = useNavigate();
 
   const images = {
@@ -122,120 +122,29 @@ function VideoCall({ role }) {
   };
 
   useEffect(() => {
-    // Clear any existing data in localStorage when switching roles
-    if (isSender) {
-      localStorage.removeItem("answer");
-      localStorage.removeItem("iceCandidates");
-    } else {
-      localStorage.removeItem("offer");
-      localStorage.removeItem("iceCandidates");
-    }
-    hasSetRemoteDescription.current = false;
+    // Initialize Socket.IO connection
+    socketRef.current = io('https://5b91-2409-40c1-5f-5f2c-575-e0c8-86e0-72a4.ngrok-free.app');
+
+    socketRef.current.on('connect', () => {
+      console.log('Connected to signaling server');
+      setConnectionStatus('Connected to signaling server');
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from signaling server');
+      setConnectionStatus('Disconnected from signaling server');
+    });
+
     setupWebRTC();
+
     return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
       if (peerConnection.current) {
         peerConnection.current.close();
       }
     };
-  }, [isSender]);
-
-  // Handle signaling
-  useEffect(() => {
-    const handleSignaling = async () => {
-      if (!peerConnection.current) return;
-
-      try {
-        if (isSender) {
-          // Sender creates and stores offer
-          if (
-            peerConnection.current.signalingState === "stable" &&
-            !localStorage.getItem("offer")
-          ) {
-            const offer = await peerConnection.current.createOffer();
-            await peerConnection.current.setLocalDescription(offer);
-            localStorage.setItem("offer", JSON.stringify(offer));
-            setConnectionStatus("Offer created, waiting for answer...");
-          }
-
-          // Check for answer
-          const answer = localStorage.getItem("answer");
-          if (
-            answer &&
-            !hasSetRemoteDescription.current &&
-            peerConnection.current.signalingState === "have-local-offer"
-          ) {
-            const parsedAnswer = JSON.parse(answer);
-            await peerConnection.current.setRemoteDescription(
-              new RTCSessionDescription(parsedAnswer)
-            );
-            hasSetRemoteDescription.current = true;
-            setConnectionStatus(
-              "Answer received, processing ICE candidates..."
-            );
-
-            // Process any pending candidates
-            while (pendingCandidates.current.length > 0) {
-              const candidate = pendingCandidates.current.shift();
-              await peerConnection.current.addIceCandidate(
-                new RTCIceCandidate(candidate)
-              );
-            }
-          }
-        } else {
-          // Receiver checks for offer
-          const offer = localStorage.getItem("offer");
-          if (
-            offer &&
-            !hasSetRemoteDescription.current &&
-            peerConnection.current.signalingState === "stable"
-          ) {
-            const parsedOffer = JSON.parse(offer);
-            await peerConnection.current.setRemoteDescription(
-              new RTCSessionDescription(parsedOffer)
-            );
-            hasSetRemoteDescription.current = true;
-            setConnectionStatus("Offer received, creating answer...");
-
-            // Process any pending candidates
-            while (pendingCandidates.current.length > 0) {
-              const candidate = pendingCandidates.current.shift();
-              await peerConnection.current.addIceCandidate(
-                new RTCIceCandidate(candidate)
-              );
-            }
-
-            const answer = await peerConnection.current.createAnswer();
-            await peerConnection.current.setLocalDescription(answer);
-            localStorage.setItem("answer", JSON.stringify(answer));
-            setConnectionStatus("Answer created and sent");
-          }
-        }
-
-        // Handle ICE candidates
-        const candidates = JSON.parse(
-          localStorage.getItem("iceCandidates") || "[]"
-        );
-        if (candidates.length > 0) {
-          if (peerConnection.current.remoteDescription) {
-            for (const candidate of candidates) {
-              await peerConnection.current.addIceCandidate(
-                new RTCIceCandidate(candidate)
-              );
-            }
-            localStorage.setItem("iceCandidates", "[]"); // Clear processed candidates
-          } else {
-            // Store candidates for later processing
-            pendingCandidates.current.push(...candidates);
-          }
-        }
-      } catch (error) {
-        console.error("Signaling error:", error);
-        setConnectionStatus("Error during signaling: " + error.message);
-      }
-    };
-
-    const interval = setInterval(handleSignaling, 1000);
-    return () => clearInterval(interval);
   }, [isSender]);
 
   const setupWebRTC = async () => {
@@ -263,6 +172,11 @@ function VideoCall({ role }) {
           setIsConnected(false);
           setConnectionStatus("Disconnected");
         };
+
+        // Create and send offer
+        const offer = await peerConnection.current.createOffer();
+        await peerConnection.current.setLocalDescription(offer);
+        socketRef.current.emit('offer', offer);
       } else {
         peerConnection.current.ondatachannel = (event) => {
           dataChannel.current = event.channel;
@@ -286,29 +200,41 @@ function VideoCall({ role }) {
         };
       }
 
+      // Handle ICE candidates
       peerConnection.current.onicecandidate = (event) => {
         if (event.candidate) {
-          const candidates = JSON.parse(localStorage.getItem("iceCandidates") || "[]");
-          candidates.push(event.candidate);
-          localStorage.setItem("iceCandidates", JSON.stringify(candidates));
+          socketRef.current.emit('ice-candidate', event.candidate);
         }
       };
+
+      // Listen for signaling events
+      socketRef.current.on('offer', async (offer) => {
+        if (!isSender) {
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
+          const answer = await peerConnection.current.createAnswer();
+          await peerConnection.current.setLocalDescription(answer);
+          socketRef.current.emit('answer', answer);
+        }
+      });
+
+      socketRef.current.on('answer', async (answer) => {
+        if (isSender) {
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+      });
+
+      socketRef.current.on('ice-candidate', async (candidate) => {
+        if (peerConnection.current.remoteDescription) {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      });
 
       peerConnection.current.onconnectionstatechange = () => {
         setConnectionStatus(peerConnection.current.connectionState);
       };
 
-      peerConnection.current.oniceconnectionstatechange = () => {
-        if (peerConnection.current.iceConnectionState === "connected") {
-          setIsConnected(true);
-          setConnectionStatus("Connected");
-        } else if (peerConnection.current.iceConnectionState === "disconnected" || 
-                  peerConnection.current.iceConnectionState === "failed") {
-          setIsConnected(false);
-          setConnectionStatus("Disconnected");
-        }
-      };
     } catch (error) {
+      console.error("Error setting up WebRTC:", error);
       setConnectionStatus("Error setting up WebRTC: " + error.message);
     }
   };
